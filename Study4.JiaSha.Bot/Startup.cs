@@ -2,84 +2,55 @@
 using System.Collections.Generic;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.Bot.Builder.Ai.LUIS;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Bot.Builder;
 using Microsoft.Bot.Builder.BotFramework;
-using Microsoft.Bot.Builder.Core.Extensions;
 using Microsoft.Bot.Builder.Integration.AspNet.Core;
 using Microsoft.Bot.Builder.TraceExtensions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Study4.JiaSha.Bot.Bots;
+using Study4.JiaSha.Bot.Dialogs;
 
 namespace Study4.JiaSha.Bot
 {
     public class Startup
     {
-        // This method gets called by the runtime. Use this method to add services to the container.
-        // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
-        public Startup(IHostingEnvironment env)
-        {
-            var builder = new ConfigurationBuilder()
-                .SetBasePath(env.ContentRootPath)
-                .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
-                .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true)
-                .AddEnvironmentVariables();
-
-            Configuration = builder.Build();
-        }
-
         public IConfiguration Configuration { get; }
+
+        public Startup(IConfiguration configuration)
+        {
+            Configuration = configuration;
+        }
 
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
-            services.AddBot<RootBot>(options =>
-            {
-                options.CredentialProvider = new ConfigurationCredentialProvider(Configuration);
-                
-                // The CatchExceptionMiddleware provides a top-level exception handler for your bot. 
-                // Any exceptions thrown by other Middleware, or by your OnTurn method, will be 
-                // caught here. To facillitate debugging, the exception is sent out, via Trace, 
-                // to the emulator. Trace activities are NOT displayed to users, so in addition
-                // an "Ooops" message is sent. 
-                options.Middleware.Add(new CatchExceptionMiddleware<Exception>(async (context, exception) =>
-                {
-                    await context.TraceActivity("RootBot Exception", exception);
-                    await context.SendActivity(exception.ToString());
-                    
-                    await context.SendActivity("Sorry, it looks like something went wrong!");
-                }));
+            services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_2_1);
 
-                // Add LUIS recognizer as middleware
-                options.Middleware.Add(
-                    new LuisRecognizerMiddleware(
-                        new LuisModel(
-                            // This appID is for a public app that's made available for demo purposes
-                            "eb0bf5e0-b468-421b-9375-fdfb644c512e",
-                            // You can use it by replacing <subscriptionKey> with your Authoring Key
-                            // which you can find at https://www.luis.ai under User settings > Authoring Key
-                            "<subscriptionKey>",
-                            // The location-based URL begins with "https://<region>.api.cognitive.microsoft.com", where region is the region associated with the key you are using. Some examples of regions are `westus`, `westcentralus`, `eastus2`, and `southeastasia`.
-                            new Uri("https://southeastasia.api.cognitive.microsoft.com/luis/v2.0/apps/"))));
+            // Create the Bot Framework Adapter with error handling enabled.
+            services.AddSingleton<IBotFrameworkHttpAdapter, AdapterWithErrorHandler>();
 
-                // The Memory Storage used here is for local bot debugging only. When the bot
-                // is restarted, anything stored in memory will be gone. 
-                IStorage dataStore = new MemoryStorage();
+            // Create the storage we'll be using for User and Conversation state. (Memory is great for testing purposes.)
+            services.AddSingleton<IStorage, MemoryStorage>();
 
-                // The File data store, shown here, is suitable for bots that run on 
-                // a single machine and need durable state across application restarts.                 
-                // IStorage dataStore = new FileStorage(System.IO.Path.GetTempPath());
+            // Create the User state. (Used in this bot's Dialog implementation.)
+            services.AddSingleton<UserState>();
 
-                // For production bots use the Azure Table Store, Azure Blob, or 
-                // Azure CosmosDB storage provides, as seen below. To include any of 
-                // the Azure based storage providers, add the Microsoft.Bot.Builder.Azure 
-                // Nuget package to your solution. That package is found at:
-                //      https://www.nuget.org/packages/Microsoft.Bot.Builder.Azure/
+            // Create the Conversation state. (Used by the Dialog system itself.)
+            services.AddSingleton<ConversationState>();
 
-                // IStorage dataStore = new Microsoft.Bot.Builder.Azure.AzureTableStorage("AzureTablesConnectionString", "TableName");
-                // IStorage dataStore = new Microsoft.Bot.Builder.Azure.AzureBlobStorage("AzureBlobConnectionString", "containerName");
+            // Register LUIS recognizer
+            services.AddSingleton<FindFoodRecognizer>();
 
-                options.Middleware.Add(new ConversationState<Dictionary<string, object>>(dataStore));
-            });
+            // Register the BookingDialog.
+            services.AddSingleton<FindFoodDialog>();
+
+            // The Dialog that will be run by the bot.
+            services.AddSingleton<RootDialog>();
+
+            // 建立提供 ASP Controller 使用的 IBot 元件
+            services.AddTransient<IBot, DialogAndWelcomeBot<RootDialog>>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -89,10 +60,15 @@ namespace Study4.JiaSha.Bot
             {
                 app.UseDeveloperExceptionPage();
             }
+            else
+            {
+                app.UseHsts();
+            }
 
-            app.UseDefaultFiles()
-                .UseStaticFiles()
-                .UseBotFramework();
+            app.UseDefaultFiles();
+            app.UseStaticFiles();
+
+            app.UseMvc();
         }
     }
 }
