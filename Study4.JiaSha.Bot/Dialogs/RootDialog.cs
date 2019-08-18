@@ -40,15 +40,15 @@ namespace Study4.JiaSha.Bot.Dialogs
         private async Task<DialogTurnResult> FirstStepAsync(WaterfallStepContext stepContext, CancellationToken cancellationToken)
         {
             // 無設定 LUIS，結束
-            //if (!_luisRecognizer.IsConfigured)
-            //{
-            //    await stepContext.Context.SendActivityAsync(
-            //        MessageFactory.Text(
-            //            "NOTE: LUIS is not configured. To enable all capabilities, add 'LuisAppId', " +
-            //            "'LuisAPIKey' and 'LuisAPIHostName' to the appsettings.json file.",
-            //            inputHint: InputHints.IgnoringInput), cancellationToken);
-            //    return await stepContext.EndDialogAsync(null, cancellationToken);
-            //}
+            if (!_luisRecognizer.IsConfigured)
+            {
+                await stepContext.Context.SendActivityAsync(
+                    MessageFactory.Text(
+                        "NOTE: LUIS is not configured. To enable all capabilities, add 'LuisAppId', " +
+                        "'LuisAPIKey' and 'LuisAPIHostName' to the appsettings.json file.",
+                        inputHint: InputHints.IgnoringInput), cancellationToken);
+                return await stepContext.EndDialogAsync(null, cancellationToken);
+            }
 
             var messageText = stepContext.Options?.ToString() ?? "請問有甚麼需要幫忙的嗎";
             var promptMessage = MessageFactory.Text(messageText, messageText, InputHints.ExpectingInput);
@@ -60,9 +60,9 @@ namespace Study4.JiaSha.Bot.Dialogs
 
         private async Task<DialogTurnResult> ActStepAsync(WaterfallStepContext stepContext, CancellationToken cancellationToken)
         {
-            var result = (string)stepContext.Result;
+            var luisResult = await _luisRecognizer.RecognizeAsync(stepContext.Context, cancellationToken);
 
-            switch (result)
+            switch (luisResult.GetTopScoringIntent().intent)
             {
                 case "hi":
                     await stepContext.Context.TraceActivityAsync("hi");

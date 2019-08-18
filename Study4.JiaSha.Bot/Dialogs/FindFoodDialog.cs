@@ -1,9 +1,6 @@
-﻿//using Microsoft.Bot.Builder.Core.Extensions;
-using Microsoft.Bot.Builder;
+﻿using Microsoft.Bot.Builder;
 using Microsoft.Bot.Builder.Dialogs;
 using Microsoft.Bot.Builder.Dialogs.Choices;
-//using Microsoft.Bot.Builder.Prompts;
-//using Microsoft.Bot.Builder.Prompts.Choices;
 using Microsoft.Bot.Schema;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Recognizers.Text;
@@ -50,7 +47,7 @@ namespace Study4.JiaSha.Bot.Dialogs
                new PromptOptions
                {
                    Prompt = MessageFactory.Text("請選擇食物類型"),
-                   Choices = ChoiceFactory.ToChoices(new List<string> { "餐廳", "中式", "日式" }),
+                   Choices = ChoiceFactory.ToChoices(new List<string> { "餐廳", "咖啡", "夜店" }),
                    RetryPrompt = MessageFactory.Text("您輸入的資料不正確")
                },
                cancellationToken);
@@ -66,7 +63,7 @@ namespace Study4.JiaSha.Bot.Dialogs
                 nameof(NumberPrompt<int>),
                 new PromptOptions
                 {
-                    Prompt = MessageFactory.Text("請輸入你的評分"),
+                    Prompt = MessageFactory.Text("請輸入你的最低評分 ( 1~5 )"),
                     RetryPrompt = MessageFactory.Text("請輸入 1 ~ 5 分間"),
                 },
                 cancellationToken);
@@ -82,10 +79,28 @@ namespace Study4.JiaSha.Bot.Dialogs
                 $"餐廳類別為 : {detail.FoodType}\n" +
                 $"評分為 : {detail.Score}");
 
+            var typeString = "";
+            switch (detail.FoodType)
+            {
+                case "餐廳":
+                    typeString = $"type=restaurant";
+                    break;
+                case "咖啡":
+                    typeString = $"type=cafe";
+                    break;
+                case "夜店":
+                    typeString = $"type=night_club";
+                    break;
+                default:
+                    break;
+            }
+
             var client = new HttpClient();
             var res = await client.GetAsync($"https://maps.googleapis.com/maps/api/place/nearbysearch/json?" +
-                                    $"location=25.040585,121.5648247&radius=1000&query={detail.FoodType}&" +
-                                    $"language=zh-tw&key={_googleKey}");
+                                    $"location=31.170887,121.4036843&radius=10000&{typeString}" +
+                                    //$"&location=25.040585,121.5648247&radius=1000&query={detail.FoodType}" +
+                                    $"&language=zh-tw&key={_googleKey}");
+
             res.EnsureSuccessStatusCode();
             string json = await res.Content.ReadAsStringAsync();
             var restaurantResult = JsonConvert.DeserializeObject<RestaurantResult>(json);
@@ -103,14 +118,6 @@ namespace Study4.JiaSha.Bot.Dialogs
                 {
                     Title = restaurant.Name,
                     Subtitle = $"{restaurant.Rating} starts.",
-                    Images = new List<CardImage>()
-                    {
-                        new CardImage() { Url =
-                        $"https://maps.googleapis.com/maps/api/place/photo?maxwidth=200&photoreference=" +
-                        $"{restaurant.Photos[0].PhotoReference}&key={_googleKey}"
-
-                        }
-                    },
                     Buttons = new List<CardAction>()
                     {
                         new CardAction()
@@ -121,6 +128,18 @@ namespace Study4.JiaSha.Bot.Dialogs
                         }
                     }
                 };
+
+                if(restaurant.Photos != null)
+                {
+                    heroCard.Images = new List<CardImage>()
+                    {
+                        new CardImage() { Url =
+                        $"https://maps.googleapis.com/maps/api/place/photo?maxwidth=200&photoreference=" +
+                        $"{restaurant.Photos[0].PhotoReference}&key={_googleKey}"
+
+                        }
+                    };
+                }
 
                 activity.Attachments.Add(heroCard.ToAttachment());
                
