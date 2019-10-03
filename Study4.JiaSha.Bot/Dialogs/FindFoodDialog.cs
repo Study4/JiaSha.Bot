@@ -5,6 +5,7 @@ using Microsoft.Bot.Schema;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Recognizers.Text;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Study4.JiaSha.Bot.Models;
 using System;
 using System.Collections.Generic;
@@ -97,13 +98,142 @@ namespace Study4.JiaSha.Bot.Dialogs
 
             var client = new HttpClient();
             var res = await client.GetAsync($"https://maps.googleapis.com/maps/api/place/nearbysearch/json?" +
-                                    $"location=31.170887,121.4036843&radius=10000&{typeString}" +
+                                    $"location=24.979343,121.551575&radius=10000&{typeString}" +
+                                    //24.979343,121.551575
                                     //$"&location=25.040585,121.5648247&radius=1000&query={detail.FoodType}" +
                                     $"&language=zh-tw&key={_googleKey}");
 
             res.EnsureSuccessStatusCode();
             string json = await res.Content.ReadAsStringAsync();
             var restaurantResult = JsonConvert.DeserializeObject<RestaurantResult>(json);
+            
+
+
+            // Line Channel
+            if (stepContext.Context.Activity.ChannelId == "line")
+            {
+                //await stepContext.Context.SendActivityAsync(activity);
+                await stepContext.Context.SendActivityAsync($"Line Channel");
+
+                var cards = new object[
+                    (restaurantResult.Results.Count() > 10) ?  10 : restaurantResult.Results.Count()
+                ]; // Line 最大為 10
+
+                
+                var resturantList = restaurantResult.Results.ToList();
+                for (int i = 0; i < 10; i++)
+                {
+                    var restaurant = resturantList[i];
+                    cards[i] = new
+                    {
+                        type = "bubble",
+                        size = "micro",
+                        hero = new
+                        {
+                            type = "image",
+                            size = "full",
+                            aspectRatio = "320:213",
+                            aspectMode = "cover",
+                            url = $"https://maps.googleapis.com/maps/api/place/photo?maxwidth=200&photoreference=" +
+                                  $"{restaurant.Photos[0].PhotoReference}&key={_googleKey}"
+                        },
+                        body = new
+                        {
+                            type = "box",
+                            layout = "vertical",
+                            contents = new object[]
+                            {
+                                new
+                                {
+                                    type = "text",
+                                    text = restaurant.Name,
+                                    wrap = true,
+                                    weight = "bold",
+                                    size = "sm"
+                                },
+                                new
+                                {
+                                    type = "box",
+                                    layout = "baseline",
+                                    contents = new object[]
+                                    {
+                                        new
+                                        {
+                                            type= "icon",
+                                            size= "xs",
+                                            url= "https://scdn.line-apps.com/n/channel_devcenter/img/fx/review_gold_star_28.png"
+                                        },
+                                        new
+                                        {
+                                            type= "text",
+                                            text= restaurant.Rating.ToString(),
+                                            size= "xs",
+                                            color= "#8c8c8c",
+                                            margin= "md",
+                                            flex= 0
+                                        }
+                                    }
+                                },
+                                new
+                                {
+                                    type= "box",
+                                    layout= "vertical",
+                                    contents = new object[]
+                                    {
+                                        new
+                                        {
+                                            type= "box",
+                                            layout= "baseline",
+                                            spacing= "sm",
+                                            contents = new object[]
+                                            {
+                                                new
+                                                {
+                                                    type= "text",
+                                                    text= "Study4",
+                                                    wrap= true,
+                                                    color= "#8c8c8c",
+                                                    size= "xs",
+                                                    flex= 5
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                            },
+                            spacing = "sm",
+                            paddingAll = "13px"
+                        },
+
+                    };
+                }
+
+                var reply = stepContext.Context.Activity.CreateReply();
+                reply.ChannelData = new
+                //{
+                //    type = "sticker",
+                //    packageId = "1",
+                //    stickerId = "1",
+                //};
+
+                {
+                    type = "flex",
+                    altText = "This is a Flex Message",
+                    contents = new
+                    {
+                        type = "carousel",
+                        contents = cards
+                    },
+                };
+
+
+                await stepContext.Context.SendActivityAsync($"我找到了 {cards.Count()} 家餐廳:");
+                await stepContext.Context.SendActivityAsync(reply);
+                return await stepContext.EndDialogAsync();
+            }
+
+            // WebChannel and Common Channel
             var activity = MessageFactory.Carousel(new List<Attachment>());
 
             foreach (var restaurant in restaurantResult.Results)
@@ -129,7 +259,7 @@ namespace Study4.JiaSha.Bot.Dialogs
                     }
                 };
 
-                if(restaurant.Photos != null)
+                if (restaurant.Photos != null)
                 {
                     heroCard.Images = new List<CardImage>()
                     {
@@ -142,17 +272,12 @@ namespace Study4.JiaSha.Bot.Dialogs
                 }
 
                 activity.Attachments.Add(heroCard.ToAttachment());
-               
+
             }
 
-            await stepContext.Context.SendActivityAsync($"我找到了 {activity.Attachments.Count()} 家餐廳:");
-
-
             await stepContext.Context.SendActivityAsync(activity);
-
             return await stepContext.EndDialogAsync();
 
-            
         }
 
         /// <summary>

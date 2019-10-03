@@ -27,6 +27,8 @@ namespace Study4.JiaSha.Bot
                 // Send a catch-all apology to the user.
                 var errorMessage = MessageFactory.Text(ErrorMsgText, ErrorMsgText, InputHints.ExpectingInput);
                 await turnContext.SendActivityAsync(errorMessage);
+                await turnContext.SendActivityAsync(exception.Message);
+
 
                 if (conversationState != null)
                 {

@@ -64,7 +64,7 @@ namespace Study4.JiaSha.Bot.Dialogs
 
             switch (luisResult.GetTopScoringIntent().intent)
             {
-                case "hi":
+                case "Hi":
                     await stepContext.Context.TraceActivityAsync("hi");
                     await stepContext.Context.SendActivityAsync("hi");
                     return await stepContext.NextAsync();
